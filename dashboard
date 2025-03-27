@@ -1,0 +1,96 @@
+import os
+import time
+import platform
+import psutil
+import logging
+import winreg
+import win32evtlog
+import subprocess
+from collections import deque
+from flask import Flask, render_template, jsonify
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Flask app setup
+app = Flask(__name__)
+
+# Anomaly detection settings
+log_history = deque(maxlen=100)  # Store last 100 log lines
+suspicious_keywords = ["error", "failed", "unauthorized", "attack", "malware", "suspicious"]
+
+# Global storage for logs and alerts
+logs = []
+alerts = []
+
+def detect_anomalies(log_line):
+    """Detect anomalies in logs based on predefined keywords."""
+    if any(keyword in log_line.lower() for keyword in suspicious_keywords):
+        alert = f"Potential anomaly detected: {log_line}"
+        logging.warning(alert)
+        alerts.append(alert)
+    logs.append(log_line)
+    log_history.append(log_line)
+
+# Function to monitor a log file in real-time
+def monitor_log_file(log_file):
+    """Monitor a log file in real-time and print new lines."""
+    logging.info(f"Monitoring log file: {log_file}")
+    try:
+        with open(log_file, 'r') as f:
+            f.seek(0, os.SEEK_END)  # Move to end of file
+            while True:
+                line = f.readline()
+                if line:
+                    logging.info(f"[LOG] {line.strip()}")
+                    detect_anomalies(line.strip())
+                time.sleep(1)
+    except Exception as e:
+        logging.error(f"Error while monitoring log file: {e}")
+
+# Function to list running processes
+def list_processes():
+    """List all running processes."""
+    process_list = []
+    try:
+        for proc in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent', 'memory_percent']):
+            process_info = {
+                "pid": proc.info['pid'],
+                "name": proc.info['name'],
+                "cpu": proc.info['cpu_percent'],
+                "memory": proc.info['memory_percent']
+            }
+            process_list.append(process_info)
+            logging.info(process_info)
+    except Exception as e:
+        logging.error(f"Error while listing processes: {e}")
+    return process_list
+
+# Flask routes
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/logs')
+def get_logs():
+    return jsonify({"logs": logs[-50:]})
+
+@app.route('/alerts')
+def get_alerts():
+    return jsonify({"alerts": alerts[-20:]})
+
+@app.route('/processes')
+def get_processes():
+    return jsonify({"processes": list_processes()})
+
+if __name__ == "__main__":
+    logging.info("Starting Log Collector...")
+    list_processes()
+    log_file_path = os.getenv('LOG_FILE_PATH', 'system.log')
+    if os.path.exists(log_file_path):
+        monitor_log_file(log_file_path)
+    else:
+        logging.error(f"Log file {log_file_path} not found.")
+    
+    # Start Flask web server
+    app.run(host='0.0.0.0', port=5000, debug=True)
