@@ -2,45 +2,58 @@ import os
 import time
 import platform
 import psutil
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Function to monitor a log file in real-time
 def monitor_log_file(log_file):
-    print(f"Monitoring log file: {log_file}")
-    with open(log_file, 'r') as f:
-        f.seek(0, os.SEEK_END)  # Move to end of file
-        while True:
-            line = f.readline()
-            if line:
-                print(f"[LOG] {line.strip()}")
-            time.sleep(1)
+    """Monitor a log file in real-time and print new lines."""
+    logging.info(f"Monitoring log file: {log_file}")
+    try:
+        with open(log_file, 'r') as f:
+            f.seek(0, os.SEEK_END)  # Move to end of file
+            while True:
+                line = f.readline()
+                if line:
+                    logging.info(f"[LOG] {line.strip()}")
+                time.sleep(1)
+    except Exception as e:
+        logging.error(f"Error while monitoring log file: {e}")
 
 # Function to list running processes
 def list_processes():
-    print("Listing running processes:")
-    for proc in psutil.process_iter(attrs=['pid', 'name']):
-        print(f"PID: {proc.info['pid']}, Name: {proc.info['name']}")
+    """List all running processes."""
+    logging.info("Listing running processes:")
+    try:
+        for proc in psutil.process_iter(attrs=['pid', 'name']):
+            logging.info(f"PID: {proc.info['pid']}, Name: {proc.info['name']}")
+    except Exception as e:
+        logging.error(f"Error while listing processes: {e}")
 
 # Function to collect system logs (Windows Event Logs or Linux Syslog)
 def collect_system_logs():
+    """Collect system logs based on the operating system."""
     system = platform.system()
     if system == "Windows":
-        print("Collecting Windows Event Logs... (Placeholder)")
+        logging.info("Collecting Windows Event Logs...")
         # Future implementation using win32evtlog
     elif system == "Linux":
-        print("Collecting Linux Syslogs... (Placeholder)")
+        logging.info("Collecting Linux Syslogs...")
         # Future implementation using journalctl
     else:
-        print("Unsupported OS")
+        logging.warning("Unsupported OS")
 
 if __name__ == "__main__":
-    print("Starting Log Collector...")
+    logging.info("Starting Log Collector...")
     list_processes()
     collect_system_logs()
     
     # Example usage of log file monitoring
     # Replace with an actual log file path
-    log_file_path = "system.log"  # Change this to your log file
+    log_file_path = os.getenv('LOG_FILE_PATH', 'system.log')  # Change this to your log file
     if os.path.exists(log_file_path):
         monitor_log_file(log_file_path)
     else:
-        print(f"Log file {log_file_path} not found.")
+        logging.error(f"Log file {log_file_path} not found.")
