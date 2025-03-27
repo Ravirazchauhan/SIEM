@@ -1,0 +1,88 @@
+import os
+import time
+import platform
+import psutil
+import logging
+import winreg
+import win32evtlog
+import subprocess
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Function to monitor a log file in real-time
+def monitor_log_file(log_file):
+    """Monitor a log file in real-time and print new lines."""
+    logging.info(f"Monitoring log file: {log_file}")
+    try:
+        with open(log_file, 'r') as f:
+            f.seek(0, os.SEEK_END)  # Move to end of file
+            while True:
+                line = f.readline()
+                if line:
+                    logging.info(f"[LOG] {line.strip()}")
+                time.sleep(1)
+    except Exception as e:
+        logging.error(f"Error while monitoring log file: {e}")
+
+# Function to list running processes
+def list_processes():
+    """List all running processes."""
+    logging.info("Listing running processes:")
+    try:
+        for proc in psutil.process_iter(attrs=['pid', 'name']):
+            logging.info(f"PID: {proc.info['pid']}, Name: {proc.info['name']}")
+    except Exception as e:
+        logging.error(f"Error while listing processes: {e}")
+
+# Function to collect system logs (Windows Event Logs or Linux Syslog)
+def collect_system_logs():
+    """Collect system logs based on the operating system."""
+    system = platform.system()
+    if system == "Windows":
+        logging.info("Collecting Windows Event Logs...")
+        try:
+            hand = win32evtlog.OpenEventLog(None, "System")
+            flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+            events = win32evtlog.ReadEventLog(hand, flags, 0)
+            for event in events[:10]:  # Limit to 10 logs for now
+                logging.info(f"Event ID: {event.EventID}, Source: {event.SourceName}")
+        except Exception as e:
+            logging.error(f"Error reading Windows Event Logs: {e}")
+    elif system == "Linux":
+        logging.info("Collecting Linux Syslogs...")
+        try:
+            result = subprocess.run(["journalctl", "--lines=10"], capture_output=True, text=True)
+            logging.info(result.stdout)
+        except Exception as e:
+            logging.error(f"Error reading Linux Syslogs: {e}")
+    else:
+        logging.warning("Unsupported OS")
+
+# Function to monitor Windows Registry changes
+def monitor_registry():
+    """Monitor Windows registry changes."""
+    if platform.system() != "Windows":
+        logging.warning("Registry monitoring is only supported on Windows.")
+        return
+    try:
+        registry_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE", 0, winreg.KEY_READ)
+        info = winreg.QueryInfoKey(registry_key)
+        logging.info(f"Number of subkeys: {info[0]}, Number of values: {info[1]}")
+        winreg.CloseKey(registry_key)
+    except Exception as e:
+        logging.error(f"Error monitoring registry: {e}")
+
+if __name__ == "__main__":
+    logging.info("Starting Log Collector...")
+    list_processes()
+    collect_system_logs()
+    monitor_registry()
+    
+    # Example usage of log file monitoring
+    # Replace with an actual log file path
+    log_file_path = os.getenv('LOG_FILE_PATH', 'system.log')  # Change this to your log file
+    if os.path.exists(log_file_path):
+        monitor_log_file(log_file_path)
+    else:
+        logging.error(f"Log file {log_file_path} not found.")
